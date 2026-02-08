@@ -1,0 +1,47 @@
+{
+  "default_action": "deny",
+  "capabilities": [
+    {
+      "name": "read_only_search",
+      "tools": ["search"],
+      "arg_constraints": {
+        "query": { "type": "str", "required": true, "max_len": 200 }
+      }
+    },
+    {
+      "name": "file_write_limited",
+      "tools": ["file_write"],
+      "arg_constraints": {
+        "path": { "type": "str", "required": true, "max_len": 200 },
+        "content": { "type": "str", "required": true, "max_len": 500 }
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "deny-high-injection",
+      "effect": "deny",
+      "max_injection_score": 0.6
+    },
+    {
+      "id": "deny-untrusted-write",
+      "effect": "deny",
+      "tool": "file_write",
+      "max_untrusted_ratio": 0.25
+    },
+    {
+      "id": "allow-search",
+      "effect": "allow",
+      "tool": "search",
+      "max_injection_score": 0.4,
+      "require_capability": "read_only_search"
+    },
+    {
+      "id": "sandbox-write",
+      "effect": "sandbox",
+      "tool": "file_write",
+      "max_injection_score": 0.2,
+      "require_capability": "file_write_limited"
+    }
+  ]
+}
