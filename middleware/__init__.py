@@ -1,14 +1,34 @@
-from .middleware import SecurityMiddleware
+from .middleware import DefenseMode, MiddlewareContext, SecurityMiddleware, ToolRegistry
+from .models import (
+    DataProvenance,
+    DecisionAction,
+    SourceType,
+    ToolCall,
+    ToolDecision,
+    ToolResponse,
+    TrustLevel,
+)
 from .policy import PolicyEngine
-from .models import ToolCall, ToolDecision, TrustLevel
-from .taint import TaintedValue, DataProvenance
+from .response_firewall import ResponseFirewall
+from .secrets import SecretDetector
+from .taint import TaintedValue, default_untrusted_provenance, wrap
 
 __all__ = [
-    "SecurityMiddleware",
+    "DataProvenance",
+    "DecisionAction",
+    "DefenseMode",
+    "MiddlewareContext",
     "PolicyEngine",
+    "ResponseFirewall",
+    "SecretDetector",
+    "SecurityMiddleware",
+    "SourceType",
+    "TaintedValue",
     "ToolCall",
     "ToolDecision",
+    "ToolRegistry",
+    "ToolResponse",
     "TrustLevel",
-    "TaintedValue",
-    "DataProvenance",
+    "default_untrusted_provenance",
+    "wrap",
 ]

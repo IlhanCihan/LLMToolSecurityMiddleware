@@ -1,47 +1,177 @@
 {
   "default_action": "deny",
+  "tool_allowlist": [
+    "search_web",
+    "fetch_url",
+    "read_file",
+    "write_file",
+    "draft_email",
+    "send_email",
+    "query_database",
+    "execute_code_sandbox"
+  ],
   "capabilities": [
     {
       "name": "read_only_search",
-      "tools": ["search"],
+      "tools": ["search_web"],
+      "read_only": true,
+      "required_fields": ["query"],
+      "max_argument_length": {"query": 200},
+      "no_secrets_in_arguments": true,
       "arg_constraints": {
-        "query": { "type": "str", "required": true, "max_len": 200 }
+        "query": {"type": "str", "required": true, "max_len": 200}
       }
     },
     {
-      "name": "file_write_limited",
-      "tools": ["file_write"],
-      "arg_constraints": {
-        "path": { "type": "str", "required": true, "max_len": 200 },
-        "content": { "type": "str", "required": true, "max_len": 500 }
-      }
+      "name": "file_read_limited",
+      "tools": ["read_file"],
+      "read_only": true,
+      "required_fields": ["path"],
+      "allowed_path_prefixes": ["/sandbox/", "/tmp/public/"],
+      "blocked_path_patterns": ["\\.\\./", "/etc/", "/root/"],
+      "max_argument_length": {"path": 256}
+    },
+    {
+      "name": "file_write_sandboxed",
+      "tools": ["write_file"],
+      "write": true,
+      "required_fields": ["path", "content"],
+      "allowed_path_prefixes": ["/sandbox/"],
+      "blocked_path_patterns": ["\\.\\./", "/etc/", "/root/"],
+      "max_argument_length": {"path": 256, "content": 5000}
+    },
+    {
+      "name": "email_draft_only",
+      "tools": ["draft_email"],
+      "read_only": true,
+      "required_fields": ["to", "subject", "body"],
+      "allowed_domains": ["company.com", "internal.local"],
+      "max_argument_length": {"body": 5000}
+    },
+    {
+      "name": "email_send_requires_approval",
+      "tools": ["send_email"],
+      "write": true,
+      "required_fields": ["to", "subject", "body"],
+      "blocked_external_destinations": ["attacker.com", "evil.com"],
+      "max_argument_length": {"body": 5000}
+    },
+    {
+      "name": "code_exec_sandboxed",
+      "tools": ["execute_code_sandbox"],
+      "write": true,
+      "required_fields": ["code"],
+      "max_argument_length": {"code": 2000}
     }
   ],
   "rules": [
     {
       "id": "deny-high-injection",
       "effect": "deny",
-      "max_injection_score": 0.6
+      "priority": 10,
+      "when": {
+        "risk.injection_score": {"gte": 0.6}
+      }
     },
     {
-      "id": "deny-untrusted-write",
+      "id": "deny-high-context-injection",
       "effect": "deny",
-      "tool": "file_write",
-      "max_untrusted_ratio": 0.25
+      "priority": 11,
+      "when": {
+        "risk.context_injection_score": {"gte": 0.6}
+      }
+    },
+    {
+      "id": "deny-secrets-in-args",
+      "effect": "deny",
+      "priority": 15,
+      "when": {
+        "risk.secret_detected": {"eq": true}
+      }
+    },
+    {
+      "id": "deny-untrusted-file-write",
+      "effect": "deny",
+      "priority": 20,
+      "when": {
+        "tool.name": {"eq": "write_file"},
+        "taint.has_untrusted": {"eq": true}
+      }
+    },
+    {
+      "id": "require-approval-external-email",
+      "effect": "require_approval",
+      "priority": 30,
+      "when": {
+        "tool.name": {"eq": "send_email"},
+        "taint.has_untrusted": {"eq": true}
+      }
+    },
+    {
+      "id": "deny-exfiltration-intent",
+      "effect": "deny",
+      "priority": 25,
+      "when": {
+        "risk.intent": {"eq": "exfiltration"},
+        "risk.intent_score": {"gte": 0.3}
+      }
     },
     {
       "id": "allow-search",
       "effect": "allow",
-      "tool": "search",
-      "max_injection_score": 0.4,
-      "require_capability": "read_only_search"
+      "priority": 100,
+      "when": {
+        "tool.name": {"eq": "search_web"},
+        "risk.injection_score": {"lt": 0.6},
+        "capabilities": {"contains": "read_only_search"}
+      }
+    },
+    {
+      "id": "allow-read-file",
+      "effect": "allow",
+      "priority": 100,
+      "when": {
+        "tool.name": {"eq": "read_file"},
+        "risk.injection_score": {"lt": 0.6}
+      }
     },
     {
       "id": "sandbox-write",
       "effect": "sandbox",
-      "tool": "file_write",
-      "max_injection_score": 0.2,
-      "require_capability": "file_write_limited"
+      "priority": 100,
+      "when": {
+        "tool.name": {"eq": "write_file"},
+        "risk.injection_score": {"lt": 0.6},
+        "taint.has_untrusted": {"eq": false}
+      }
+    },
+    {
+      "id": "allow-draft-email",
+      "effect": "allow",
+      "priority": 100,
+      "when": {
+        "tool.name": {"eq": "draft_email"},
+        "risk.injection_score": {"lt": 0.6}
+      }
+    },
+    {
+      "id": "allow-send-email-trusted",
+      "effect": "allow",
+      "priority": 100,
+      "when": {
+        "tool.name": {"eq": "send_email"},
+        "taint.has_untrusted": {"eq": false},
+        "risk.injection_score": {"lt": 0.6}
+      }
+    },
+    {
+      "id": "allow-code-exec",
+      "effect": "sandbox",
+      "priority": 100,
+      "when": {
+        "tool.name": {"eq": "execute_code_sandbox"},
+        "risk.injection_score": {"lt": 0.6}
+      }
     }
   ]
 }
